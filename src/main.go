@@ -41,7 +41,11 @@ func main() {
 		contentType, data, err := render.Render(URL, proxy, viewport, wait, timeout, headless != "false" && headless != "0", images != "false" && images != "0", renderer)
 		// error handling
 		if err != nil {
-			c.String(http.StatusBadGateway, "chromedp.Run error %v", err)
+			statusCode := http.StatusBadGateway
+			if strings.Contains(err.Error(), "context deadline exceeded") {
+				statusCode = http.StatusGatewayTimeout
+			}
+			c.String(statusCode, "chromedp.Run error %v", err)
 			return
 		}
 		if strings.Contains(string(data), "Chromium Authors") {
