@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/pkg/errors"
 )
 
 // DefaultTimeout sets the default number of seconds to timeout
@@ -38,7 +39,7 @@ var Renderers = map[string]Renderer{
 }
 
 // Render renders web page over Chromium instance
-func Render(url, proxy, viewport, wait, timeout string, headless, images bool, r Renderer) (string, []byte, error) {
+func Render(url, proxy, viewport, script, wait, timeout string, headless, images bool, r Renderer) (string, []byte, error) {
 	// prepare options
 	opts := chromedp.DefaultExecAllocatorOptions[:]
 
@@ -82,6 +83,21 @@ func Render(url, proxy, viewport, wait, timeout string, headless, images bool, r
 	// navigate
 	if err := chromedp.Run(ctx, chromedp.Navigate(url)); err != nil {
 		return "", nil, fmt.Errorf("could not navigate to %s: %v", url, err)
+	}
+
+	if script != "" {
+		err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+			var result interface{}
+			err := chromedp.Evaluate(`var result = ""; function exit(e){ result = "exit("+e+")"; }; try{`+script+`;} catch(e){result = e.message}; result;`, &result).Do(ctx)
+			if err != nil {
+				return errors.Wrapf(err, "error until execute proxy script: \n%s\n", script)
+			}
+			log.Printf("Executed script with result: %v", result)
+			return nil
+		}))
+		if err != nil {
+			return "", nil, fmt.Errorf("error executing script on url %s: %v", url, err)
+		}
 	}
 
 	if w, err := time.ParseDuration(wait); err == nil {
