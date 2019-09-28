@@ -1,14 +1,18 @@
 package main
 
 import (
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 
 	"github.com/melehin/gosplash/render"
 
 	"github.com/gin-gonic/gin"
 )
+
+const CtxMaxPort = "MaxPort"
 
 func renderHandler(c *gin.Context) {
 	URL, ok := c.GetQuery("url")
@@ -43,7 +47,15 @@ func renderHandler(c *gin.Context) {
 		return
 	}
 
-	contentType, data, err := render.Render(URL, proxy, viewport, script, wait, timeout, headless != "false" && headless != "0", images != "false" && images != "0", renderer)
+	var port int32 = -1
+	if headless == "false" || headless == "0" {
+		if p, ok := c.Get(CtxMaxPort); ok {
+			port, _ = p.(int32)
+		}
+		log.Printf("Port: %d", port)
+	}
+
+	contentType, data, err := render.Render(URL, proxy, viewport, script, wait, timeout, int(port), images != "false" && images != "0", renderer)
 	// error handling
 	if err != nil {
 		statusCode := http.StatusBadGateway
@@ -64,11 +76,23 @@ func renderHandler(c *gin.Context) {
 	c.Data(http.StatusOK, contentType, data)
 }
 
+type Server struct {
+	port int32
+}
+
+func (s *Server) Handler(c *gin.Context) {
+	c.Set(CtxMaxPort, atomic.AddInt32(&s.port, 1))
+	defer atomic.AddInt32(&s.port, -1)
+	renderHandler(c)
+}
+
 func main() {
 	router := gin.Default()
 
-	router.GET("/render.:format", renderHandler)
-	router.POST("/render.:format", renderHandler)
+	var s Server
+
+	router.GET("/render.:format", s.Handler)
+	router.POST("/render.:format", s.Handler)
 
 	router.Run(":8050")
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -39,11 +40,12 @@ var Renderers = map[string]Renderer{
 }
 
 // Render renders web page over Chromium instance
-func Render(url, proxy, viewport, script, wait, timeout string, headless, images bool, r Renderer) (string, []byte, error) {
+func Render(url, proxy, viewport, script, wait, timeout string, port int, images bool, r Renderer) (string, []byte, error) {
 	// prepare options
 	opts := chromedp.DefaultExecAllocatorOptions[:]
 
-	opts = append(opts[:], chromedp.Flag("headless", headless))
+	// port = -1 then headless
+	opts = append(opts[:], chromedp.Flag("headless", port == -1))
 
 	if proxy != "" {
 		opts = append(opts[:], chromedp.ProxyServer(proxy))
@@ -69,6 +71,18 @@ func Render(url, proxy, viewport, script, wait, timeout string, headless, images
 
 	// create context
 	ctx, cancel := context.WithTimeout(context.Background(), t)
+	defer cancel()
+
+	cctx, cancel := context.WithTimeout(context.Background(), t)
+
+	if port > -1 {
+		p := fmt.Sprintf(":%d", port)
+		cmd := exec.CommandContext(cctx, "Xvfb", p)
+		if cmd.Start() == nil {
+			opts = append(opts[:], chromedp.Flag("display", p))
+			defer cmd.Wait()
+		}
+	}
 	defer cancel()
 
 	ctx, cancel = chromedp.NewExecAllocator(ctx, opts...)

@@ -26,4 +26,4 @@ ENV PATH=$PATH:/usr/bin/:/go/bin/
 # Copy our static executable
 COPY --from=builder /go/bin/gosplash /go/bin/gosplash
 EXPOSE 8050
-CMD xvfb-run -s "-screen 0 1280x1024x24" gosplash
+CMD gosplash
