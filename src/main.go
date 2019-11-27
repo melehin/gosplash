@@ -55,7 +55,7 @@ func renderHandler(c *gin.Context) {
 		log.Printf("Port: %d", port)
 	}
 
-	contentType, data, err := render.Render(URL, proxy, viewport, c.Request.Cookies(), script, wait, timeout, int(port), images != "false" && images != "0", renderer)
+	contentType, data, err := render.Render(URL, c.Request.Header.Get("Referer"), proxy, viewport, c.Request.Cookies(), script, wait, timeout, int(port), images != "false" && images != "0", renderer)
 	// error handling
 	if err != nil {
 		statusCode := http.StatusBadGateway

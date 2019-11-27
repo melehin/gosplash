@@ -51,7 +51,7 @@ func GetDomain(rawurl string) string {
 }
 
 // Render renders web page over Chromium instance
-func Render(url, proxy, viewport string, cookies []*http.Cookie, script, wait, timeout string, port int, images bool, r Renderer) (string, []byte, error) {
+func Render(url, referer, proxy, viewport string, cookies []*http.Cookie, script, wait, timeout string, port int, images bool, r Renderer) (string, []byte, error) {
 	// prepare options
 	opts := chromedp.DefaultExecAllocatorOptions[:]
 
@@ -105,8 +105,15 @@ func Render(url, proxy, viewport string, cookies []*http.Cookie, script, wait, t
 	)
 	defer cancel()
 
-	// set Cookies
+	// set Referer and Cookies
 	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		// set Referer
+		if referer != "" {
+			err := network.SetExtraHTTPHeaders(network.Headers{"Referer": referer}).Do(ctx)
+			if err != nil {
+				return err
+			}
+		}
 		// add cookies to chrome
 		for _, cookie := range cookies {
 			success, err := network.SetCookie(cookie.Name, cookie.Value).
