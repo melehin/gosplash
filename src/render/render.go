@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
+	"net/url"
 	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 	"github.com/pkg/errors"
 )
@@ -39,8 +42,16 @@ var Renderers = map[string]Renderer{
 	},
 }
 
+func GetDomain(rawurl string) string {
+	URL, err := url.Parse(rawurl)
+	if err != nil {
+		return "localhost"
+	}
+	return URL.Host
+}
+
 // Render renders web page over Chromium instance
-func Render(url, proxy, viewport, script, wait, timeout string, port int, images bool, r Renderer) (string, []byte, error) {
+func Render(url, proxy, viewport string, cookies []*http.Cookie, script, wait, timeout string, port int, images bool, r Renderer) (string, []byte, error) {
 	// prepare options
 	opts := chromedp.DefaultExecAllocatorOptions[:]
 
@@ -93,6 +104,27 @@ func Render(url, proxy, viewport, script, wait, timeout string, port int, images
 		chromedp.WithLogf(log.Printf),
 	)
 	defer cancel()
+
+	// set Cookies
+	err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+		// add cookies to chrome
+		for _, cookie := range cookies {
+			success, err := network.SetCookie(cookie.Name, cookie.Value).
+				WithDomain(GetDomain(url)).
+				WithHTTPOnly(true).
+				Do(ctx)
+			if err != nil {
+				return err
+			}
+			if !success {
+				return fmt.Errorf("could not set cookie %q to %q", cookie.Name, cookie.Value)
+			}
+		}
+		return nil
+	}))
+	if err != nil {
+		return "", nil, fmt.Errorf("set cookies error to %s: %v", url, err)
+	}
 
 	// navigate
 	if err := chromedp.Run(ctx, chromedp.Navigate(url)); err != nil {
